@@ -1,19 +1,19 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
-using Newtonsoft;
 using Squid.Entity;
-
 
 namespace Squid
 {
     public class Squid
     {
-        private DiscordSocketClient _client;
-        private Config _config;
+        internal DiscordSocketClient _client;
+        internal Config _config;
+        internal List<Guild> _guilds;
 
         public Squid()
         {
@@ -30,17 +30,15 @@ namespace Squid
             WriteCenter("                   88                             ");
             Console.WriteLine("\n\n\n");
             Console.ResetColor();
+
             if (!File.Exists("config.json"))
             {
                 new Config().SaveConfig("config.json");
                 WriteCenter("Error - No config found. Please fill out the 'config.json' that has been generated.", 2);
-                System.Threading.Thread.Sleep(4000);
+                System.Threading.Thread.Sleep(3000);
                 Environment.Exit(0);
             }
-
             _config = Config.LoadConfig("config.json");
-
-
         }
 
 
@@ -54,14 +52,33 @@ namespace Squid
             await _client.LoginAsync(TokenType.Bot, _config.Token);
             await _client.StartAsync();
 
+            _client.GuildMemberUpdated += GuildMemberUpdated;
+
             _client.Ready += () =>
             {
                 Log(new LogMessage(LogSeverity.Info, "Squid", $"Logged in as {_client.CurrentUser.Username}#{_client.CurrentUser.Discriminator}." +
                                                               $"\nServing {_client.Guilds.Count} guilds with a total of {_client.Guilds.Sum(guild => guild.Users.Count)} online users."));
+                
+
+                
+
+
+
+
                 return Task.CompletedTask;
             };
 
             await Task.Delay(-1);
+        }
+
+        private async Task GuildMemberUpdated(SocketUser oldSocketUser, SocketUser newSocketUser)
+        {
+            if (newSocketUser.Activity != null && (newSocketUser.Activity.Type == ActivityType.Playing))
+            {
+                await Log(new LogMessage(LogSeverity.Info, "UUUU", newSocketUser.Activity.Type.ToString()));
+                var n = newSocketUser as SocketGuildUser;
+                Console.WriteLine(n?.Guild);
+            }
         }
 
         private bool IsModerator(SocketGuildUser user)
@@ -72,7 +89,12 @@ namespace Squid
                                           user.Roles.Any(role => role.Permissions.Administrator || role.Permissions.BanMembers || 
                                           role.Permissions.ManageChannels ||role.Permissions.ManageGuild || role.Permissions.ManageRoles || role.Permissions.ManageMessages);
         }
-        
+
+        private static bool ClientCanSeeChannel(SocketGuildChannel channel, SocketGuild guild)
+        {
+            return guild.CurrentUser.GetPermissions(channel).SendMessages;
+        }
+
         private static void WriteCenter(string value, int skipline = 0)
         {
             //Taken from https://github.com/DSharpPlus/DSharpPlus-Example/blob/master/DiscordBot/DiscordBot/Bot.cs

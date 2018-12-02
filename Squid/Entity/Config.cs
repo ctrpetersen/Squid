@@ -7,6 +7,7 @@ namespace Squid.Entity
     {
         [JsonProperty("token")] internal string Token = "Token";
         [JsonProperty("prefix")] internal string Prefix = "--"; // Default prefix. Guild prefix will take priority if set.
+        [JsonProperty("twitch_client_id")] internal string TwitchClientId = "Twitch client id";
 
         public static Config LoadConfig(string path)
         {
