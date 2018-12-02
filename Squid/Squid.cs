@@ -56,7 +56,7 @@ namespace Squid
 
             _client.Ready += () =>
             {
-                Log(new LogMessage(LogSeverity.Info, "squid", $"Logged in as {_client.CurrentUser.Username}#{_client.CurrentUser.Discriminator}." +
+                Log(new LogMessage(LogSeverity.Info, "Squid", $"Logged in as {_client.CurrentUser.Username}#{_client.CurrentUser.Discriminator}." +
                                                               $"\nServing {_client.Guilds.Count} guilds with a total of {_client.Guilds.Sum(guild => guild.Users.Count)} online users."));
                 return Task.CompletedTask;
             };
@@ -64,9 +64,16 @@ namespace Squid
             await Task.Delay(-1);
         }
 
-
+        private bool IsModerator(SocketGuildUser user)
+        {
+            return user.Roles.Any(role => role.Name.ToLower().Contains("mod") || role.Name.ToLower().Contains("moderator") ||
+                                          role.Name.ToLower().Contains("admin") || role.Name.ToLower().Contains("owner") ||
+                                          role.Name.ToLower().Contains("bot commander") || role.Name.ToLower().Contains("squid")) || 
+                                          user.Roles.Any(role => role.Permissions.Administrator || role.Permissions.BanMembers || 
+                                          role.Permissions.ManageChannels ||role.Permissions.ManageGuild || role.Permissions.ManageRoles || role.Permissions.ManageMessages);
+        }
         
-        internal void WriteCenter(string value, int skipline = 0)
+        private static void WriteCenter(string value, int skipline = 0)
         {
             //Taken from https://github.com/DSharpPlus/DSharpPlus-Example/blob/master/DiscordBot/DiscordBot/Bot.cs
             for (int i = 0; i < skipline; i++)
@@ -76,7 +83,7 @@ namespace Squid
             Console.WriteLine(value);
         }
 
-        public static Task Log(LogMessage logmsg)
+        private static Task Log(LogMessage logmsg)
         {
             switch (logmsg.Severity)
             {

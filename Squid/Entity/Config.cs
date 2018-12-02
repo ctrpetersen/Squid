@@ -6,7 +6,7 @@ namespace Squid.Entity
     internal class Config
     {
         [JsonProperty("token")] internal string Token = "Token";
-        [JsonProperty("prefix")] internal string Prefix = "--";
+        [JsonProperty("prefix")] internal string Prefix = "--"; // Default prefix. Guild prefix will take priority if set.
 
         public static Config LoadConfig(string path)
         {
