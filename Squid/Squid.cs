@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
@@ -17,7 +18,7 @@ namespace Squid
         public Squid()
         {
             Console.ForegroundColor = ConsoleColor.DarkRed;
-            WriteCenter("                                  88          88  ");
+            WriteCenter("                                  88          88  ", 4);
             WriteCenter("                                  \"\"          88  ");
             WriteCenter("                                              88  ");
             WriteCenter(",adPPYba,  ,adPPYb,d8 88       88 88  ,adPPYb,88  ");
@@ -27,6 +28,7 @@ namespace Squid
             WriteCenter("`\"YbbdP\"\'  `\"YbbdP\'88  `\"YbbdP\'Y8 88  `\"8bbdP\"Y8  ");
             WriteCenter("                   88                             ");
             WriteCenter("                   88                             ");
+            Console.WriteLine("\n\n\n");
             Console.ResetColor();
             if (!File.Exists("config.json"))
             {
@@ -52,6 +54,13 @@ namespace Squid
             await _client.LoginAsync(TokenType.Bot, _config.Token);
             await _client.StartAsync();
 
+            _client.Ready += () =>
+            {
+                Log(new LogMessage(LogSeverity.Info, "squid", $"Logged in as {_client.CurrentUser.Username}#{_client.CurrentUser.Discriminator}." +
+                                                              $"\nServing {_client.Guilds.Count} guilds with a total of {_client.Guilds.Sum(guild => guild.Users.Count)} online users."));
+                return Task.CompletedTask;
+            };
+
             await Task.Delay(-1);
         }
 
@@ -65,6 +74,30 @@ namespace Squid
 
             Console.SetCursorPosition((Console.WindowWidth - value.Length) / 2, Console.CursorTop);
             Console.WriteLine(value);
+        }
+
+        public static Task Log(LogMessage logmsg)
+        {
+            switch (logmsg.Severity)
+            {
+                case LogSeverity.Critical:
+                case LogSeverity.Error:
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    break;
+                case LogSeverity.Warning:
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    break;
+                case LogSeverity.Info:
+                    Console.ForegroundColor = ConsoleColor.White;
+                    break;
+                case LogSeverity.Verbose:
+                case LogSeverity.Debug:
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    break;
+            }
+            Console.WriteLine($"{DateTime.Now} [{logmsg.Severity,8}] {logmsg.Source}: {logmsg.Message} {logmsg.Exception}");
+            Console.ResetColor();
+            return Task.CompletedTask;
         }
     }
 }
