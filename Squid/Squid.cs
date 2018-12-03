@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
+using Newtonsoft.Json;
 using Squid.Entity;
 
 namespace Squid
@@ -13,7 +14,7 @@ namespace Squid
     {
         internal DiscordSocketClient _client;
         internal Config _config;
-        internal List<Guild> _guilds;
+        internal List<Guild> _guilds = new List<Guild>();
 
         public Squid()
         {
@@ -31,6 +32,8 @@ namespace Squid
             Console.WriteLine("\n\n\n");
             Console.ResetColor();
 
+
+            //Config
             if (!File.Exists("config.json"))
             {
                 new Config().SaveConfig("config.json");
@@ -56,6 +59,8 @@ namespace Squid
 
             _client.Ready += () =>
             {
+                LoadGuilds();
+
                 Log(new LogMessage(LogSeverity.Info, "Squid", $"Logged in as {_client.CurrentUser.Username}#{_client.CurrentUser.Discriminator}." +
                                                               $"\nServing {_client.Guilds.Count} guilds with a total of {_client.Guilds.Sum(guild => guild.Users.Count)} online users."));
                 
@@ -69,6 +74,49 @@ namespace Squid
             };
 
             await Task.Delay(-1);
+        }
+
+        private void LoadGuilds()
+        {
+            if (!File.Exists("guilds.json"))
+            {
+                using (var sw = new StreamWriter("guilds.json"))
+                {
+                    sw.Write("{}");
+                }
+                WriteCenter("No guilds found. Saving empty one and populating with client guilds if applicable.\n", 2);
+            }
+            else
+            {
+                try
+                {
+                    _guilds = JsonConvert.DeserializeObject<IEnumerable<Guild>>("guilds.json") as List<Guild>;
+                    Log(new LogMessage(LogSeverity.Info, "squid",
+                        $"Successfully loaded {_guilds.Count} guilds from storage."));
+                    return;
+                }
+                catch (Exception e)
+                {
+                    WriteCenter($"Malformed or empty guilds.json. Adding from client.\n", 2);
+                }
+                
+            }
+
+            foreach (var guild in _client.Guilds)
+            {
+                Guild g = new Guild
+                {
+                    Id = guild.Id,
+                    Prefix = "--",
+                    LiveroleId = 0,
+                    TrackedGames = new List<string>() {"Factorio"}
+                };
+                _guilds.Add(g);
+            }
+            using (var sw = new StreamWriter("guilds.json"))
+            {
+                sw.Write(JsonConvert.SerializeObject(_guilds));
+            }
         }
 
         private async Task GuildMemberUpdated(SocketUser oldSocketUser, SocketUser newSocketUser)

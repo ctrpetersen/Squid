@@ -5,9 +5,9 @@ namespace Squid.Entity
 {
     internal class Guild
     {
-        [JsonProperty("id")] internal ulong Id = 0;
-        [JsonProperty("prefix")] internal string Prefix = "--";
-        [JsonProperty("tracked_games")] internal List<string> TrackedGames = new List<string>();
-        [JsonProperty("liverole_id")] internal ulong LiveroleId = 0;
+        [JsonProperty("id")] internal ulong Id { get; set; }
+        [JsonProperty("prefix")] internal string Prefix { get; set; }
+        [JsonProperty("tracked_games")] internal List<string> TrackedGames { get; set; }
+        [JsonProperty("liverole_id")] internal ulong LiveroleId { get; set; }
     }
 }
