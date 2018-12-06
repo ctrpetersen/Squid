@@ -56,6 +56,7 @@ namespace Squid
             await _client.StartAsync();
 
             _client.GuildMemberUpdated += GuildMemberUpdated;
+            _client.JoinedGuild += JoinedGuild;
 
             _client.Ready += () =>
             {
@@ -90,33 +91,43 @@ namespace Squid
             {
                 try
                 {
-                    _guilds = JsonConvert.DeserializeObject<IEnumerable<Guild>>("guilds.json") as List<Guild>;
+                    _guilds = JsonConvert.DeserializeObject<List<Guild>>(File.ReadAllText("guilds.json"));
                     Log(new LogMessage(LogSeverity.Info, "squid",
                         $"Successfully loaded {_guilds.Count} guilds from storage."));
                     return;
                 }
                 catch (Exception e)
                 {
+                    Console.WriteLine(e);
                     WriteCenter($"Malformed or empty guilds.json. Adding from client.\n", 2);
                 }
                 
             }
 
-            foreach (var guild in _client.Guilds)
+            if (_client.Guilds.Count > 0)
             {
-                Guild g = new Guild
+                foreach (var guild in _client.Guilds)
                 {
-                    Id = guild.Id,
-                    Prefix = "--",
-                    LiveroleId = 0,
-                    TrackedGames = new List<string>() {"Factorio"}
-                };
-                _guilds.Add(g);
+                    Guild g = new Guild
+                    {
+                        Id = guild.Id,
+                        Prefix = "--",
+                        LiveroleId = 0,
+                        TrackedGames = new List<string> {"Factorio"}
+                    };
+                    _guilds.Add(g);
+                }
             }
+
             using (var sw = new StreamWriter("guilds.json"))
             {
                 sw.Write(JsonConvert.SerializeObject(_guilds));
             }
+        }
+
+        private async Task JoinedGuild(SocketGuild guild)
+        {
+            throw new NotImplementedException();
         }
 
         private async Task GuildMemberUpdated(SocketUser oldSocketUser, SocketUser newSocketUser)
@@ -129,7 +140,7 @@ namespace Squid
             }
         }
 
-        private bool IsModerator(SocketGuildUser user)
+        private static bool IsModerator(SocketGuildUser user)
         {
             return user.Roles.Any(role => role.Name.ToLower().Contains("mod") || role.Name.ToLower().Contains("moderator") ||
                                           role.Name.ToLower().Contains("admin") || role.Name.ToLower().Contains("owner") ||

@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 
 namespace Squid.Entity
 {
-    internal class Guild
+    public class Guild
     {
         [JsonProperty("id")] internal ulong Id { get; set; }
         [JsonProperty("prefix")] internal string Prefix { get; set; }
