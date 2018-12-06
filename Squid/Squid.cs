@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
@@ -15,6 +17,7 @@ namespace Squid
         internal DiscordSocketClient _client;
         internal Config _config;
         internal List<Guild> _guilds = new List<Guild>();
+        internal readonly string _twitchApi = "https://api.twitch.tv/helix/";
 
         public Squid()
         {
@@ -61,6 +64,7 @@ namespace Squid
             _client.Ready += () =>
             {
                 LoadGuilds();
+                CheckGuildMismatch();
 
                 Log(new LogMessage(LogSeverity.Info, "Squid", $"Logged in as {_client.CurrentUser.Username}#{_client.CurrentUser.Discriminator}." +
                                                               $"\nServing {_client.Guilds.Count} guilds with a total of {_client.Guilds.Sum(guild => guild.Users.Count)} online users."));
@@ -127,16 +131,177 @@ namespace Squid
 
         private async Task JoinedGuild(SocketGuild guild)
         {
-            throw new NotImplementedException();
+            for (int i = 0; i < _guilds.Count; i++)
+            {
+                if (_guilds[i].Id == guild.Id)
+                {
+                    var newGuild = new Guild
+                    {
+                        Id = guild.Id,
+                        LiveroleId = 0,
+                        Prefix = "--",
+                        TrackedGames = new List<string> { "Factorio" }
+                    };
+                    _guilds.RemoveAt(i);
+                    _guilds.Add(newGuild);
+
+                    using (var sw = new StreamWriter("guilds.json"))
+                    {
+                        sw.Write(JsonConvert.SerializeObject(_guilds));
+                    }
+
+                    await Log(new LogMessage(LogSeverity.Info, "squid",
+                        $"Joined new guild {guild.Name} that was already stored. Updating with default values."));
+                    return;
+                }
+            }
+            await Log(new LogMessage(LogSeverity.Info, "squid",
+                $"Joined new guild {guild.Name}. Saving with default values."));
+
+            var newGuildNotStored = new Guild
+            {
+                Id = guild.Id,
+                LiveroleId = 0,
+                Prefix = "--",
+                TrackedGames = new List<string> { "Factorio" }
+            };
+
+            _guilds.Add(newGuildNotStored);
+
+            using (var sw = new StreamWriter("guilds.json"))
+            {
+                sw.Write(JsonConvert.SerializeObject(_guilds));
+            }
+        }
+
+        private void CheckGuildMismatch()
+        {
+            Log(new LogMessage(LogSeverity.Info, "squid", "Checking for mismatch between guilds."));
+
+            //missing guilds from storage
+            foreach (var cGuild in _client.Guilds)
+            {
+                bool missing = true;
+                foreach (var x in _guilds)
+                {
+                    if (x.Id == cGuild.Id)
+                    {
+                        missing = false;
+                        break;
+                    }
+                }
+
+                if (missing)
+                {
+                    var newGuild = new Guild
+                    {
+                        Id = cGuild.Id,
+                        LiveroleId = 0,
+                        Prefix = "--",
+                        TrackedGames = new List<string> { "Factorio" }
+                    };
+
+                    _guilds.Add(newGuild);
+
+                    using (var sw = new StreamWriter("guilds.json"))
+                    {
+                        sw.Write(JsonConvert.SerializeObject(_guilds));
+                    }
+
+                    Log(new LogMessage(LogSeverity.Info, "squid", $"Found missing guild {cGuild.Name}. Adding to storage."));
+                }
+            }
+
+            //extra guilds in storage
+            for (int i = 0; i < _guilds.Count; i++)
+            {
+                bool extra = true;
+                foreach (var cGuild in _client.Guilds)
+                {
+                    if (_guilds[i].Id == cGuild.Id)
+                    {
+                        extra = false;
+                    }
+                }
+
+                if (extra)
+                {
+                    _guilds.RemoveAt(i);
+                    using (var sw = new StreamWriter("guilds.json"))
+                    {
+                        sw.Write(JsonConvert.SerializeObject(_guilds));
+                    }
+                    Log(new LogMessage(LogSeverity.Info, "squid", $"Found missing guild {_guilds[i].Id}. Deleting from storage."));
+                }
+            }
         }
 
         private async Task GuildMemberUpdated(SocketUser oldSocketUser, SocketUser newSocketUser)
         {
-            if (newSocketUser.Activity != null && (newSocketUser.Activity.Type == ActivityType.Playing))
+            if (newSocketUser.Activity != null && (newSocketUser.Activity.Type == ActivityType.Streaming))
             {
-                await Log(new LogMessage(LogSeverity.Info, "UUUU", newSocketUser.Activity.Type.ToString()));
-                var n = newSocketUser as SocketGuildUser;
-                Console.WriteLine(n?.Guild);
+                var streaming = newSocketUser.Activity as StreamingGame;
+                var twitchName = streaming?.Url.Substring(streaming.Url.LastIndexOf('/') + 1);
+
+                try
+                {
+                    var streamReq = (HttpWebRequest)WebRequest.Create(_twitchApi + "streams/" + "?user_login=" + twitchName);
+                    streamReq.Headers["client-id"] = _config.TwitchClientId;
+
+                    using (HttpWebResponse streamResp = (HttpWebResponse) streamReq.GetResponse())
+                    using (Stream streamStream = streamResp.GetResponseStream())
+                    using (StreamReader streamSR = new StreamReader(streamStream ?? throw new InvalidOperationException()))
+                    {
+                        var streamRespJson = JsonConvert.DeserializeObject<dynamic>(streamSR.ReadToEnd());
+
+                        //check if game being streamed is on the list
+
+                        int gameId = streamRespJson.data[0].game_id;
+
+                        var gameReq = (HttpWebRequest) WebRequest.Create(_twitchApi + "games/" + "?id=" + gameId);
+                        gameReq.Headers["client-id"] = _config.TwitchClientId;
+
+                        using (HttpWebResponse gameResp = (HttpWebResponse) gameReq.GetResponse())
+                        using (Stream gameStream = gameResp.GetResponseStream())
+                        using (StreamReader gameSR = new StreamReader(gameStream ?? throw new InvalidOperationException()))
+                        {
+                            var gameRespJson = JsonConvert.DeserializeObject<dynamic>(gameSR.ReadToEnd());
+
+                            string gameName = gameRespJson.data[0].name.ToString();
+
+                            var socketGuildUser = (SocketGuildUser) newSocketUser;
+                            var guild = _guilds.FirstOrDefault(x => x.Id == socketGuildUser.Id);
+
+                            if (guild != null)
+                            {
+                                if (guild.TrackedGames.Any(x => x == gameName))
+                                {
+                                    var role = socketGuildUser.Guild.GetRole(guild.LiveroleId);
+
+                                    if (role != null)
+                                    {
+                                        await socketGuildUser.AddRoleAsync(role);
+                                    }
+                                    else
+                                    {
+                                        await Log(new LogMessage(LogSeverity.Critical, "squid",
+                                            $"Role id {guild.LiveroleId} does not exist in guild {guild.Id}"));
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                await Log(new LogMessage(LogSeverity.Critical, "squid",
+                                    $"Guild was null!"));
+                            }
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    await Log(new LogMessage(LogSeverity.Critical, "squid", e.ToString()));
+                    return;
+                }
             }
         }
 
